@@ -123,7 +123,9 @@ fn is_dangerous_to_call_with_exec(command: &[String]) -> bool {
             }
         }
 
-        Some("rm") => matches!(command.get(1).map(String::as_str), Some("-f" | "-rf")),
+        // Different version of this check right now
+        // Some("rm") => matches!(command.get(1).map(String::as_str), Some("-f" | "-rf")),
+        Some("rm") => command.iter().any(|arg| arg.starts_with("/") || arg.starts_with("~") || arg.contains(".git")),
 
         // for sudo <cmd> simply do the check for <cmd>
         Some("sudo") => is_dangerous_to_call_with_exec(&command[1..]),
