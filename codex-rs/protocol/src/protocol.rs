@@ -487,13 +487,14 @@ impl SandboxPolicy {
                     .into_iter()
                     .map(|writable_root| {
                         let mut subpaths = Vec::new();
-                        #[allow(clippy::expect_used)]
-                        let top_level_git = writable_root
-                            .join(".git")
-                            .expect(".git is a valid relative path");
-                        if top_level_git.as_path().is_dir() {
-                            subpaths.push(top_level_git);
-                        }
+                        // FORK: Removed read-only .git since it makes jj hard to use
+                         // #[allow(clippy::expect_used)]
+                         // let top_level_git = writable_root
+                         //     .join(".git")
+                         //     .expect(".git is a valid relative path");
+                         // if top_level_git.as_path().is_dir() {
+                         //     subpaths.push(top_level_git);
+                         // }
                         #[allow(clippy::expect_used)]
                         let top_level_codex = writable_root
                             .join(".codex")
