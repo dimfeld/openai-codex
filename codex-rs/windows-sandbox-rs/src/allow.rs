@@ -52,7 +52,8 @@ pub fn compute_allow_paths(
                 let canonical = canonicalize(&candidate).unwrap_or(candidate);
                 add_allow(canonical.clone());
 
-                for protected_subdir in [".git", ".codex", ".agents"] {
+                // FORK: Disabled .git protection to allow git operations in the sandbox
+                for protected_subdir in [".codex", ".agents"] {
                     let protected_entry = canonical.join(protected_subdir);
                     if protected_entry.exists() {
                         add_deny(protected_entry);
