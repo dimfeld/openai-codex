@@ -44,7 +44,7 @@ const PROTECTED_METADATA_AWS_PATH_NAME: &str = ".aws";
 
 /// Top-level workspace metadata paths that stay protected under writable roots.
 pub const PROTECTED_METADATA_PATH_NAMES: &[&str] = &[
-    PROTECTED_METADATA_GIT_PATH_NAME,
+    // PROTECTED_METADATA_GIT_PATH_NAME,
     PROTECTED_METADATA_AGENTS_PATH_NAME,
     PROTECTED_METADATA_CODEX_PATH_NAME,
     PROTECTED_METADATA_AWS_PATH_NAME,
@@ -857,7 +857,8 @@ impl FileSystemSandboxPolicy {
                 .map(|path| FileSystemSandboxEntry::new(path.into(), FileSystemAccessMode::Write)),
         );
 
-        append_default_read_only_project_root_subpath_if_no_explicit_rule(&mut entries, ".git");
+        // FORK: Leave .git writable so jj/git can operate in the sandbox.
+        // append_default_read_only_project_root_subpath_if_no_explicit_rule(&mut entries, ".git");
         append_default_read_only_project_root_subpath_if_no_explicit_rule(&mut entries, ".agents");
         append_default_read_only_project_root_subpath_if_no_explicit_rule(&mut entries, ".codex");
         append_default_read_only_project_root_subpath_if_no_explicit_rule(&mut entries, ".aws");
@@ -2355,7 +2356,8 @@ pub(crate) fn default_read_only_subpaths_for_writable_root(
     // writable root itself.
     let top_level_git_is_file = top_level_git.as_path().is_file();
     let top_level_git_is_dir = top_level_git.as_path().is_dir();
-    let should_protect_top_level = top_level_git_is_dir || top_level_git_is_file;
+    // FORK: Leave .git writable so jj/git can operate in the sandbox.
+    let should_protect_top_level = false; // top_level_git_is_dir || top_level_git_is_file;
     if should_protect_top_level {
         if top_level_git_is_file
             && is_git_pointer_file(&top_level_git)
