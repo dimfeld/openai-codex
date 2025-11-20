@@ -102,6 +102,11 @@
   (global-name "com.apple.PowerManagement.control")
 )
 
+; Allow Chromium/Playwright to register and resolve the Mach rendezvous
+; service used for browser child-process communication.
+(allow mach-register mach-lookup
+  (global-name-prefix "org.chromium.Chromium."))
+
 ; allow openpty()
 (allow pseudo-tty)
 (allow file-read* file-write* file-ioctl (literal "/dev/ptmx"))
