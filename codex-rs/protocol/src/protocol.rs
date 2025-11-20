@@ -751,28 +751,29 @@ impl SandboxPolicy {
                 roots
                     .into_iter()
                     .map(|writable_root| {
-                        let mut subpaths: Vec<AbsolutePathBuf> = Vec::new();
-                        #[allow(clippy::expect_used)]
-                        let top_level_git = writable_root
-                            .join(".git")
-                            .expect(".git is a valid relative path");
+                        let mut subpaths = Vec::new();
+                        // FORK: Removed read-only .git since it makes jj hard to use
+                        // #[allow(clippy::expect_used)]
+                        // let top_level_git = writable_root
+                        //     .join(".git")
+                        //     .expect(".git is a valid relative path");
                         // This applies to typical repos (directory .git), worktrees/submodules
                         // (file .git with gitdir pointer), and bare repos when the gitdir is the
                         // writable root itself.
-                        let top_level_git_is_file = top_level_git.as_path().is_file();
-                        let top_level_git_is_dir = top_level_git.as_path().is_dir();
-                        if top_level_git_is_dir || top_level_git_is_file {
-                            if top_level_git_is_file
-                                && is_git_pointer_file(&top_level_git)
-                                && let Some(gitdir) = resolve_gitdir_from_file(&top_level_git)
-                                && !subpaths
-                                    .iter()
-                                    .any(|subpath| subpath.as_path() == gitdir.as_path())
-                            {
-                                subpaths.push(gitdir);
-                            }
-                            subpaths.push(top_level_git);
-                        }
+                        // let top_level_git_is_file = top_level_git.as_path().is_file();
+                        // let top_level_git_is_dir = top_level_git.as_path().is_dir();
+                        // if top_level_git_is_dir || top_level_git_is_file {
+                        //     if top_level_git_is_file
+                        //         && is_git_pointer_file(&top_level_git)
+                        //         && let Some(gitdir) = resolve_gitdir_from_file(&top_level_git)
+                        //         && !subpaths
+                        //             .iter()
+                        //             .any(|subpath| subpath.as_path() == gitdir.as_path())
+                        //     {
+                        //         subpaths.push(gitdir);
+                        //     }
+                        //     subpaths.push(top_level_git);
+                        // }
 
                         // Make .agents/skills and .codex/config.toml and
                         // related files read-only to the agent, by default.
