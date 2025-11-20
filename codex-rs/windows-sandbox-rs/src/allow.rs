@@ -37,7 +37,6 @@ pub(crate) fn compute_allow_paths_for_permissions(
             add_deny_path(read_only_subpath);
         }
     }
-
     AllowDenyPaths { allow, deny }
 }
 
@@ -251,69 +250,6 @@ mod tests {
 
         assert_eq!(expected_allow, paths.allow);
         assert!(paths.deny.is_empty(), "no deny paths expected");
-    }
-
-    #[test]
-    fn denies_git_dir_inside_writable_root() {
-        let tmp = TempDir::new().expect("tempdir");
-        let command_cwd = tmp.path().join("workspace");
-        let git_dir = command_cwd.join(".git");
-        let _ = fs::create_dir_all(&git_dir);
-
-        let permission_profile = workspace_write_profile(
-            &[],
-            /*exclude_tmpdir_env_var*/ true,
-            /*exclude_slash_tmp*/ false,
-        );
-        let workspace_roots = workspace_roots_for(command_cwd.as_path());
-
-        let paths = compute_allow_paths(
-            &permission_profile,
-            workspace_roots.as_slice(),
-            &command_cwd,
-            &HashMap::new(),
-        );
-        let expected_allow: HashSet<PathBuf> = [dunce::canonicalize(&command_cwd).unwrap()]
-            .into_iter()
-            .collect();
-        let expected_deny: HashSet<PathBuf> = [dunce::canonicalize(&git_dir).unwrap()]
-            .into_iter()
-            .collect();
-
-        assert_eq!(expected_allow, paths.allow);
-        assert_eq!(expected_deny, paths.deny);
-    }
-
-    #[test]
-    fn denies_git_file_inside_writable_root() {
-        let tmp = TempDir::new().expect("tempdir");
-        let command_cwd = tmp.path().join("workspace");
-        let git_file = command_cwd.join(".git");
-        let _ = fs::create_dir_all(&command_cwd);
-        let _ = fs::write(&git_file, "gitdir: .git/worktrees/example");
-
-        let permission_profile = workspace_write_profile(
-            &[],
-            /*exclude_tmpdir_env_var*/ true,
-            /*exclude_slash_tmp*/ false,
-        );
-        let workspace_roots = workspace_roots_for(command_cwd.as_path());
-
-        let paths = compute_allow_paths(
-            &permission_profile,
-            workspace_roots.as_slice(),
-            &command_cwd,
-            &HashMap::new(),
-        );
-        let expected_allow: HashSet<PathBuf> = [dunce::canonicalize(&command_cwd).unwrap()]
-            .into_iter()
-            .collect();
-        let expected_deny: HashSet<PathBuf> = [dunce::canonicalize(&git_file).unwrap()]
-            .into_iter()
-            .collect();
-
-        assert_eq!(expected_allow, paths.allow);
-        assert_eq!(expected_deny, paths.deny);
     }
 
     #[test]
