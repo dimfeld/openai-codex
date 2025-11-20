@@ -421,10 +421,11 @@ impl SandboxPolicy {
                     .into_iter()
                     .map(|writable_root| {
                         let mut subpaths = Vec::new();
-                        let top_level_git = writable_root.join(".git");
-                        if top_level_git.is_dir() {
-                            subpaths.push(top_level_git);
-                        }
+                        // FORK: Removed read-only .git since it makes jj hard to use
+                        // let top_level_git = writable_root.join(".git");
+                        // if top_level_git.is_dir() {
+                        //     subpaths.push(top_level_git);
+                        // }
                         WritableRoot {
                             root: writable_root,
                             read_only_subpaths: subpaths,
