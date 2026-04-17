@@ -103,6 +103,17 @@ fn base_policy_allows_kmp_registration_shm_read_create_and_unlink() {
 }
 
 #[test]
+fn base_policy_allows_chromium_mach_rendezvous_services() {
+    let expected = r#"(allow mach-register mach-lookup
+  (global-name-prefix "org.chromium.Chromium."))"#;
+
+    assert!(
+        MACOS_SEATBELT_BASE_POLICY.contains(expected),
+        "base policy must allow Chromium Mach rendezvous services:\n{MACOS_SEATBELT_BASE_POLICY}"
+    );
+}
+
+#[test]
 fn create_seatbelt_args_routes_network_through_proxy_ports() {
     let policy = dynamic_network_policy(
         &SandboxPolicy::new_read_only_policy(),
