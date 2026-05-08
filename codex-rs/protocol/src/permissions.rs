@@ -1505,13 +1505,13 @@ fn resolve_file_system_special_path(
         | FileSystemSpecialPath::Minimal
         | FileSystemSpecialPath::Unknown { .. } => None,
         FileSystemSpecialPath::ProjectRoots { subpath } => {
-            let cwd = cwd?;
+            let cwd = cwd.and_then(workspace_root_for_cwd)?;
             match subpath.as_ref() {
                 Some(subpath) => Some(AbsolutePathBuf::resolve_path_against_base(
                     subpath,
                     cwd.as_path(),
                 )),
-                None => Some(cwd.clone()),
+                None => Some(cwd),
             }
         }
         FileSystemSpecialPath::Tmpdir => {
@@ -1532,6 +1532,26 @@ fn resolve_file_system_special_path(
             Some(slash_tmp)
         }
     }
+}
+
+pub(crate) fn workspace_root_for_cwd(cwd: &AbsolutePathBuf) -> Option<AbsolutePathBuf> {
+    let base = if cwd.as_path().is_dir() {
+        cwd.clone()
+    } else {
+        cwd.parent()?
+    };
+
+    for dir in base.ancestors() {
+        if dir
+            .join(PROTECTED_METADATA_GIT_PATH_NAME)
+            .as_path()
+            .exists()
+        {
+            return Some(dir);
+        }
+    }
+
+    Some(base)
 }
 
 fn dedup_absolute_paths(
@@ -1599,11 +1619,10 @@ pub(crate) fn default_read_only_subpaths_for_writable_root(
     // This applies to typical repos (directory .git), worktrees/submodules
     // (file .git with gitdir pointer), and bare repos when the gitdir is the
     // writable root itself.
-    let top_level_git_is_file = top_level_git.as_path().is_file();
-    let top_level_git_is_dir = top_level_git.as_path().is_dir();
     // FORK: Leave .git writable so jj/git can operate in the sandbox.
     let should_protect_top_level = false; // top_level_git_is_dir || top_level_git_is_file;
     if should_protect_top_level {
+        let top_level_git_is_file = top_level_git.as_path().is_file();
         if top_level_git_is_file
             && is_git_pointer_file(&top_level_git)
             && let Some(gitdir) = resolve_gitdir_from_file(&top_level_git)
@@ -1989,6 +2008,35 @@ mod tests {
         );
     }
 
+    #[cfg(unix)]
+    #[test]
+    fn project_roots_use_git_root_for_nested_cwd() {
+        let repo_root = TempDir::new().expect("tempdir");
+        let nested_cwd = repo_root.path().join("crates").join("protocol");
+        fs::create_dir_all(&nested_cwd).expect("create nested cwd");
+        fs::create_dir_all(repo_root.path().join(".git")).expect("create .git");
+
+        let expected_root = AbsolutePathBuf::from_absolute_path(
+            repo_root
+                .path()
+                .canonicalize()
+                .expect("canonicalize repo root"),
+        )
+        .expect("absolute canonical root");
+
+        let policy = FileSystemSandboxPolicy::restricted(vec![FileSystemSandboxEntry {
+            path: FileSystemPath::Special {
+                value: FileSystemSpecialPath::project_roots(/*subpath*/ None),
+            },
+            access: FileSystemAccessMode::Write,
+            missing_path_behavior: None,
+        }]);
+
+        let writable_roots = policy.get_writable_roots_with_cwd(&nested_cwd);
+        assert_eq!(writable_roots.len(), 1);
+        assert_eq!(writable_roots[0].root, expected_root);
+    }
+
     #[test]
     fn legacy_workspace_write_projection_preserves_symbolic_project_root() {
         let policy = SandboxPolicy::WorkspaceWrite {
@@ -2113,10 +2161,10 @@ mod tests {
     #[test]
     fn filesystem_policy_blocks_protected_metadata_path_writes_by_default() {
         let cwd = TempDir::new().expect("tempdir");
-        let dot_git_config = cwd.path().join(".git").join("config");
-        let dot_agents_config = cwd.path().join(".agents").join("config");
-        let dot_codex_config = cwd.path().join(".codex").join("config.toml");
         let root = AbsolutePathBuf::from_absolute_path(cwd.path()).expect("absolute cwd");
+        let dot_git_config = root.join(".git").join("config");
+        let dot_agents_config = root.join(".agents").join("config");
+        let dot_codex_config = root.join(".codex").join("config.toml");
         let file_system_policy =
             FileSystemSandboxPolicy::restricted(vec![FileSystemSandboxEntry {
                 path: FileSystemPath::Path { path: root },
@@ -2124,23 +2172,42 @@ mod tests {
                 missing_path_behavior: None,
             }]);
 
-        assert!(!file_system_policy.can_write_path_with_cwd(&dot_git_config, cwd.path()));
-        assert!(!file_system_policy.can_write_path_with_cwd(&dot_agents_config, cwd.path()));
-        assert!(!file_system_policy.can_write_path_with_cwd(&dot_codex_config, cwd.path()));
+        assert!(file_system_policy.can_write_path_with_cwd(dot_git_config.as_path(), cwd.path()));
+        assert!(
+            !file_system_policy.can_write_path_with_cwd(dot_agents_config.as_path(), cwd.path())
+        );
+        assert!(
+            !file_system_policy.can_write_path_with_cwd(dot_codex_config.as_path(), cwd.path())
+        );
 
         let writable_roots = file_system_policy.get_writable_roots_with_cwd(cwd.path());
         assert_eq!(writable_roots.len(), 1);
         assert_eq!(
             writable_roots[0].protected_metadata_names,
-            vec![
-                ".git".to_string(),
-                ".agents".to_string(),
-                ".codex".to_string(),
-            ]
+            vec![".agents".to_string(), ".codex".to_string()]
         );
-        assert!(!writable_roots[0].is_path_writable(&dot_git_config));
-        assert!(!writable_roots[0].is_path_writable(&dot_agents_config));
-        assert!(!writable_roots[0].is_path_writable(&dot_codex_config));
+        assert!(
+            writable_roots[0]
+                .is_path_writable(writable_roots[0].root.join(".git").join("config").as_path())
+        );
+        assert!(
+            !writable_roots[0].is_path_writable(
+                writable_roots[0]
+                    .root
+                    .join(".agents")
+                    .join("config")
+                    .as_path()
+            )
+        );
+        assert!(
+            !writable_roots[0].is_path_writable(
+                writable_roots[0]
+                    .root
+                    .join(".codex")
+                    .join("config.toml")
+                    .as_path()
+            )
+        );
     }
 
     #[test]
@@ -2210,17 +2277,11 @@ mod tests {
                 relative_cwd,
                 &file_system_policy,
             ),
-            Some(".git")
+            None
         );
         assert!(
             !file_system_policy
                 .can_write_path_with_cwd(Path::new(".codex/config.toml"), relative_cwd,)
-        );
-        assert!(
-            !file_system_policy.can_write_path_with_cwd(
-                Path::new(".agents/skills/example/SKILL.md"),
-                relative_cwd,
-            )
         );
     }
 
@@ -2916,6 +2977,7 @@ mod tests {
     fn with_additional_writable_roots_adds_new_root() {
         let temp_dir = TempDir::new().expect("tempdir");
         let cwd = temp_dir.path().join("workspace");
+        std::fs::create_dir_all(&cwd).expect("create cwd");
         let extra = AbsolutePathBuf::from_absolute_path(temp_dir.path().join("extra"))
             .expect("resolve extra root");
         let policy = FileSystemSandboxPolicy::restricted(vec![FileSystemSandboxEntry {
@@ -3072,7 +3134,7 @@ mod tests {
         let temp_dir = TempDir::new().expect("tempdir");
         let extra = AbsolutePathBuf::from_absolute_path(temp_dir.path().join("extra"))
             .expect("resolve extra root");
-        std::fs::create_dir_all(extra.join(".git")).expect("create .git dir");
+        std::fs::create_dir_all(extra.join(".agents")).expect("create .agents dir");
         let policy = FileSystemSandboxPolicy::restricted(vec![FileSystemSandboxEntry {
             path: FileSystemPath::Special {
                 value: FileSystemSpecialPath::project_roots(/*subpath*/ None),
@@ -3103,7 +3165,7 @@ mod tests {
                 },
                 FileSystemSandboxEntry::skip_missing_path(
                     FileSystemPath::Path {
-                        path: extra.join(".git")
+                        path: extra.join(".agents")
                     },
                     FileSystemAccessMode::Read,
                 ),

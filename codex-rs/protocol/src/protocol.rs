@@ -94,6 +94,7 @@ pub use crate::permissions::FileSystemSandboxPolicy;
 pub use crate::permissions::FileSystemSpecialPath;
 pub use crate::permissions::NetworkSandboxPolicy;
 use crate::permissions::default_read_only_subpaths_for_writable_root;
+use crate::permissions::workspace_root_for_cwd;
 pub use crate::request_permissions::RequestPermissionsArgs;
 pub use crate::request_user_input::RequestUserInputEvent;
 
@@ -1190,16 +1191,15 @@ impl SandboxPolicy {
                 // Always include defaults: cwd, /tmp (if present on Unix), and
                 // on macOS, the per-user TMPDIR unless explicitly excluded.
                 // TODO(mbolin): cwd param should be AbsolutePathBuf.
-                let cwd_absolute = AbsolutePathBuf::from_absolute_path(cwd);
+                let cwd_absolute = AbsolutePathBuf::from_absolute_path(cwd)
+                    .ok()
+                    .and_then(|cwd| workspace_root_for_cwd(&cwd));
                 match cwd_absolute {
-                    Ok(cwd) => {
+                    Some(cwd) => {
                         roots.push(cwd);
                     }
-                    Err(e) => {
-                        error!(
-                            "Ignoring invalid cwd {:?} for sandbox writable root: {}",
-                            cwd, e
-                        );
+                    None => {
+                        error!("Ignoring invalid cwd {cwd:?} for sandbox writable root");
                     }
                 }
 
@@ -4459,6 +4459,7 @@ mod tests {
     use codex_utils_absolute_path::test_support::test_path_buf;
     use pretty_assertions::assert_eq;
     use serde_json::json;
+    use std::fs;
     use std::path::PathBuf;
     use tempfile::NamedTempFile;
     use tempfile::TempDir;
@@ -4570,6 +4571,27 @@ mod tests {
             .get_writable_roots_with_cwd(cwd)
             .iter()
             .any(|root| root.is_path_writable(path))
+    }
+
+    #[test]
+    fn workspace_write_policy_uses_git_root_for_nested_cwd() {
+        let repo_root = TempDir::new().expect("tempdir");
+        let nested_cwd = repo_root.path().join("crates").join("protocol");
+        fs::create_dir_all(&nested_cwd).expect("create nested cwd");
+        fs::create_dir_all(repo_root.path().join(".git")).expect("create .git");
+
+        let expected_root =
+            AbsolutePathBuf::from_absolute_path(repo_root.path()).expect("absolute repo root");
+        let policy = SandboxPolicy::WorkspaceWrite {
+            writable_roots: Vec::new(),
+            network_access: false,
+            exclude_tmpdir_env_var: true,
+            exclude_slash_tmp: true,
+        };
+
+        let writable_roots = policy.get_writable_roots_with_cwd(&nested_cwd);
+        assert_eq!(writable_roots.len(), 1);
+        assert_eq!(writable_roots[0].root, expected_root);
     }
 
     #[test]
