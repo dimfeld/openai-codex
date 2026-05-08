@@ -2257,13 +2257,13 @@ fn resolve_file_system_special_path(
         | FileSystemSpecialPath::Minimal
         | FileSystemSpecialPath::Unknown { .. } => None,
         FileSystemSpecialPath::ProjectRoots { subpath } => {
-            let cwd = cwd?;
+            let cwd = cwd.and_then(workspace_root_for_cwd)?;
             match subpath.as_ref() {
                 Some(subpath) => Some(AbsolutePathBuf::resolve_path_against_base(
                     subpath,
                     cwd.as_path(),
                 )),
-                None => Some(cwd.clone()),
+                None => Some(cwd),
             }
         }
         FileSystemSpecialPath::Tmpdir => {
@@ -2287,6 +2287,26 @@ fn resolve_file_system_special_path(
             Some(slash_tmp)
         }
     }
+}
+
+pub(crate) fn workspace_root_for_cwd(cwd: &AbsolutePathBuf) -> Option<AbsolutePathBuf> {
+    let base = if cwd.as_path().is_dir() {
+        cwd.clone()
+    } else {
+        cwd.parent()?
+    };
+
+    for dir in base.ancestors() {
+        if dir
+            .join(PROTECTED_METADATA_GIT_PATH_NAME)
+            .as_path()
+            .exists()
+        {
+            return Some(dir);
+        }
+    }
+
+    Some(base)
 }
 
 fn dedup_absolute_paths(
@@ -2354,11 +2374,10 @@ pub(crate) fn default_read_only_subpaths_for_writable_root(
     // This applies to typical repos (directory .git), worktrees/submodules
     // (file .git with gitdir pointer), and bare repos when the gitdir is the
     // writable root itself.
-    let top_level_git_is_file = top_level_git.as_path().is_file();
-    let top_level_git_is_dir = top_level_git.as_path().is_dir();
     // FORK: Leave .git writable so jj/git can operate in the sandbox.
     let should_protect_top_level = false; // top_level_git_is_dir || top_level_git_is_file;
     if should_protect_top_level {
+        let top_level_git_is_file = top_level_git.as_path().is_file();
         if top_level_git_is_file
             && is_git_pointer_file(&top_level_git)
             && let Some(gitdir) = resolve_gitdir_from_file(&top_level_git)
