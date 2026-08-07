@@ -9,6 +9,8 @@ use codex_http_client::HttpClientFactory;
 use codex_login::AuthManager;
 use codex_protocol::auth::AuthMode;
 use codex_protocol::config_types::CollaborationModeMask;
+use codex_protocol::error::CodexErr;
+use codex_protocol::error::CodexErrorDetails;
 use codex_protocol::error::Result as CoreResult;
 use codex_protocol::openai_models::ModelInfo;
 use codex_protocol::openai_models::ModelPreset;
@@ -345,6 +347,9 @@ impl OpenAiModelsManager {
         if let Err(err) = self
             .refresh_available_models(refresh_strategy, &http_client_factory)
             .await
+            // Fork-specific: the provider can return an incomplete models response without the
+            // top-level `models` field. Keep this known-noisy error out of the refresh logs.
+            && !is_missing_models_field_error(&err)
         {
             error!("failed to refresh available models: {err}");
         }
@@ -366,6 +371,8 @@ impl OpenAiModelsManager {
         if let Err(err) = self
             .refresh_available_models(RefreshStrategy::Online, &http_client_factory)
             .await
+            // Fork-specific: keep this log suppression in sync with the raw catalog refresh path.
+            && !is_missing_models_field_error(&err)
         {
             error!("failed to refresh available models: {err}");
         }
@@ -514,6 +521,16 @@ impl OpenAiModelsManager {
         );
         true
     }
+}
+
+// Fork-specific: match only the missing top-level `models` field from the models response
+// decoder. Other stream and refresh errors must still be logged.
+fn is_missing_models_field_error(error: &CodexErr) -> bool {
+    matches!(
+        error.details(),
+        CodexErrorDetails::Stream(message)
+            if message.starts_with("failed to decode models response: missing field `models`")
+    )
 }
 
 impl ModelsManager for StaticModelsManager {
