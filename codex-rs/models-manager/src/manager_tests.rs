@@ -16,6 +16,7 @@ use codex_login::ExternalAuth;
 use codex_login::ExternalAuthRefreshContext;
 use codex_login::TokenData;
 use codex_protocol::auth::AuthMode;
+use codex_protocol::error::CodexErr;
 use codex_protocol::openai_models::ModelsResponse;
 use pretty_assertions::assert_eq;
 use serde_json::json;
@@ -321,6 +322,20 @@ where
 
 fn static_manager_for_tests(model_catalog: ModelsResponse) -> StaticModelsManager {
     StaticModelsManager::new(/*auth_manager*/ None, model_catalog)
+}
+
+#[test]
+fn suppresses_only_missing_models_field_errors() {
+    assert!(is_missing_models_field_error(&CodexErr::Stream(
+        "failed to decode models response: missing field `models` at line 7646 column 1; body: {"
+            .to_string(),
+    )));
+    assert!(!is_missing_models_field_error(&CodexErr::Stream(
+        "failed to decode models response: missing field `data` at line 1 column 1".to_string(),
+    )));
+    assert!(!is_missing_models_field_error(&CodexErr::Stream(
+        "failed to fetch models: connection reset".to_string(),
+    )));
 }
 
 #[tokio::test]
