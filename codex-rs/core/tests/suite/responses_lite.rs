@@ -158,7 +158,10 @@ async fn responses_lite_uses_input_items_for_instructions_and_tools() -> Result<
         .filter(|tool| tool["type"] == "namespace" && tool["name"] == "functions")
         .collect::<Vec<_>>();
     assert_eq!(functions_namespaces.len(), 1);
-    assert_eq!(functions_namespaces[0]["description"], "");
+    assert_eq!(
+        functions_namespaces[0]["description"],
+        "Tools in the functions namespace."
+    );
     assert!(has_namespaced_tool(tools, "functions", "wait"));
     assert!(has_namespaced_tool(tools, "functions", "exec"));
     assert!(
