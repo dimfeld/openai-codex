@@ -170,7 +170,10 @@ async fn base_instructions_use_input_items(responses_lite: bool) -> Result<()> {
             .filter(|tool| tool["type"] == "namespace" && tool["name"] == "functions")
             .collect::<Vec<_>>();
         assert_eq!(functions_namespaces.len(), 1);
-        assert_eq!(functions_namespaces[0]["description"], "");
+        assert_eq!(
+            functions_namespaces[0]["description"],
+            "Tools in the functions namespace."
+        );
         assert!(has_namespaced_tool(tools, "functions", "wait"));
         assert!(has_namespaced_tool(tools, "functions", "exec"));
         assert!(
