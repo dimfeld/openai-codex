@@ -6,7 +6,6 @@ use crate::mcp_tool::parse_mcp_tool_with_schema_max_bytes;
 use crate::parse_agent_plugin_mcp_tool;
 use crate::parse_dynamic_tool;
 use crate::parse_mcp_tool;
-use codex_protocol::DEFAULT_FUNCTION_NAMESPACE;
 use codex_protocol::dynamic_tools::DynamicToolFunctionSpec;
 use serde::Deserialize;
 use serde::Serialize;
@@ -62,12 +61,10 @@ pub struct ResponsesApiNamespace {
     pub tools: Vec<ResponsesApiNamespaceTool>,
 }
 
+// Fork-specific workaround for Responses providers that reject empty namespace descriptions
+// (see https://github.com/openai/codex/issues/37380).
 pub fn default_namespace_description(namespace_name: &str) -> String {
-    if namespace_name == DEFAULT_FUNCTION_NAMESPACE {
-        String::new()
-    } else {
-        format!("Tools in the {namespace_name} namespace.")
-    }
+    format!("Tools in the {namespace_name} namespace.")
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
