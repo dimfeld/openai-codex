@@ -56,13 +56,15 @@ if [[ "$VERSION_PART" =~ ^[0-9.]+$ ]]; then
 fi
 
 
-cd codex-rs/cli
-cargo install --locked --path .
+cd codex-rs
+cargo clean
+cd cli
+RUST_MIN_STACK=16777216 cargo install --locked --path .
 cd ../code-mode-host
-cargo install --locked --path .
+RUST_MIN_STACK=16777216 cargo install --locked --path .
 if [[ "$(uname -s)" == "Linux" ]]; then
     cd ../linux-sandbox
-    cargo install --locked --path .
+    RUST_MIN_STACK=16777216 cargo install --locked --path .
 fi
 # Restore Cargo.lock so that next update wont cause a conflict
 jj restore ../Cargo.lock ../Cargo.toml
