@@ -1,5 +1,10 @@
 # Rust/codex-rs
 
+Important note: This project is a personal fork of the upstream with some changes. In this fork the changes are small enough that
+you *should not* update existing tests to correspond to the changes. This helps reduce merge conflicts and the fork
+maintainer is explicitly permitting this exception to the usual process.
+
+
 In the codex-rs folder where the rust code lives:
 
 - Crate names are prefixed with `codex-`. For example, the `core` folder's crate is named `codex-core`
