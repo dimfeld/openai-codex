@@ -57,7 +57,9 @@ fi
 
 
 cd codex-rs
-cargo clean
+if [[ -z "${NO_CLEAN:-}" ]]; then
+  cargo clean
+fi
 cd cli
 RUST_MIN_STACK=33554432 cargo install --locked --path .
 cd ../code-mode-host
